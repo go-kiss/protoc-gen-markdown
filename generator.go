@@ -171,35 +171,35 @@ func (t *twirp) generateJsDocForField(field field) string {
 
 	if field.Type == "TYPE_STRING" {
 		if field.isRepeated() {
-			v = "[\"a\",\"b\"]"
+			v = "[\"\",\"\"]"
 		} else {
-			v = "\"a\""
+			v = "\"\""
 		}
 		vt = "string"
 	} else if field.Type == "TYPE_DOUBLE" || field.Type == "TYPE_FLOAT" {
 		if field.isRepeated() {
-			v = "[0.1, 0.2]"
+			v = "[0.0, 0.0]"
 		} else {
-			v = "0.1"
+			v = "0.0"
 		}
 		vt = "float"
 	} else if field.Type == "TYPE_BOOL" {
 		if field.isRepeated() {
-			v = "[true, false]"
+			v = "[false, false]"
 		} else {
-			v = "true"
+			v = "false"
 		}
 		vt = "bool"
 	} else if field.Type == "TYPE_INT64" || field.Type == "TYPE_UINT64" {
 		if field.isRepeated() {
-			v = "[\"0\", \"1\"]"
+			v = "[\"0\", \"0\"]"
 		} else {
 			v = "\"0\""
 		}
 		vt = "string(int64)"
 	} else if field.Type == "TYPE_INT32" || field.Type == "TYPE_UINT32" {
 		if field.isRepeated() {
-			v = "[0, 1]"
+			v = "[0, 0]"
 		} else {
 			v = "0"
 		}
