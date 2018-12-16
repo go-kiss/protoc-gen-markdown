@@ -9,7 +9,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/protoc-gen-go/descriptor"
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
-	"github.com/olekukonko/tablewriter"
 	"github.com/pseudomuto/protokit"
 )
 
@@ -71,6 +70,7 @@ func (t *twirp) GenerateMarkdown(req *plugin.CodeGeneratorRequest, resp *plugin.
 			t.scanService(sd)
 
 			for _, api := range t.apis {
+				api.Input = t.generateJsDocForMessage(api.Request)
 				api.Output = t.generateJsDocForMessage(api.Reply)
 			}
 
@@ -130,36 +130,14 @@ func (f field) isRepeated() bool {
 	return f.Label == descriptor.FieldDescriptorProto_LABEL_REPEATED
 }
 
-func (f field) getType() (string, string) {
-	switch f.Type {
-	case "TYPE_STRING":
-		return "string", ""
-	case "TYPE_DOUBLE":
-		return "float", "64"
-	case "TYPE_FLOAT":
-		return "float", "32"
-	case "TYPE_INT32":
-		return "int", "32"
-	case "TYPE_INT64":
-		return "int", "64"
-	case "TYPE_UINT32":
-		return "uint", "32"
-	case "TYPE_UINT64":
-		return "uint", "64"
-	case "TYPE_BOOL":
-		return "bool", ""
-	default:
-		return "", ""
-	}
-}
-
 type api struct {
-	Method string
-	Path   string
-	Doc    string
-	Input  []field
-	Reply  *message
-	Output string
+	Method  string
+	Path    string
+	Doc     string
+	Request *message
+	Reply   *message
+	Input   string
+	Output  string
 }
 
 func (t *twirp) scanService(d *protokit.ServiceDescriptor) {
@@ -171,7 +149,7 @@ func (t *twirp) scanService(d *protokit.ServiceDescriptor) {
 		api.Doc = md.GetComments().GetLeading()
 
 		inputType := md.GetInputType()[1:] // trim leading dot
-		api.Input = t.messages[inputType].Fields
+		api.Request = t.messages[inputType]
 
 		outputType := md.GetOutputType()[1:] // trim leading dot
 		api.Reply = t.messages[outputType]
@@ -292,36 +270,14 @@ func (t *twirp) generateDoc() {
 		t.P(api.Method)
 		t.P()
 		t.P("### Request")
-		t.P()
-
-		rows := make([][]string, 0, len(api.Input))
-
-		for _, f := range api.Input {
-			ft, _ := f.getType()
-
-			if ft == "" {
-				ft = "object"
-				f.Doc = "please see the proto file"
-			}
-
-			if f.isRepeated() {
-				ft = ft + "[]"
-			}
-
-			rows = append(rows, []string{f.Name, ft, f.Doc, f.Note})
-		}
-
-		table := tablewriter.NewWriter(t.output)
-		table.SetHeader([]string{"name", "type", "desc", "note"})
-		table.SetBorders(tablewriter.Border{Left: true})
-		table.SetCenterSeparator("|")
-		table.AppendBulk(rows)
-		table.Render()
-
+		t.P("```javascript")
+		code, _ := jsbeautifier.Beautify(&api.Input, options)
+		t.P(code)
+		t.P("```")
 		t.P()
 		t.P("### Reply")
 		t.P("```javascript")
-		code, _ := jsbeautifier.Beautify(&api.Output, options)
+		code, _ = jsbeautifier.Beautify(&api.Output, options)
 		t.P(code)
 		t.P("```")
 	}
