@@ -24,6 +24,9 @@ type twirp struct {
 
 	// List of all APIs
 	apis []*api
+
+	// List of all service comments
+	comments *protokit.Comment
 }
 
 func newGenerator(params commandLineParams) *twirp {
@@ -141,6 +144,7 @@ type api struct {
 }
 
 func (t *twirp) scanService(d *protokit.ServiceDescriptor) {
+	t.comments = d.Comments
 	for _, md := range d.GetMethods() {
 		api := api{}
 
@@ -249,7 +253,11 @@ func (t *twirp) generateJsDocForMessage(m *message) string {
 
 func (t *twirp) generateDoc() {
 	options := jsbeautifier.DefaultOptions()
-
+	comment := strings.Split(t.comments.Leading, "\n")
+	for _, value := range comment {
+		t.P("### ", value)
+	}
+	t.P()
 	for _, api := range t.apis {
 		anchor := strings.Replace(api.Path, "/", "", -1)
 		anchor = strings.Replace(anchor, ".", "", -1)
