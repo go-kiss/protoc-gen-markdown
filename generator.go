@@ -258,7 +258,10 @@ func (t *twirp) generateDoc() {
 	options := jsbeautifier.DefaultOptions()
 	t.P("#", t.name)
 	t.P()
-	t.P(t.comments.Leading)
+	comments := strings.Split(t.comments.Leading, "\n")
+	for _, value := range comments {
+		t.P(value, "  ")
+	}
 	t.P()
 	for _, api := range t.apis {
 		anchor := strings.Replace(api.Path, "/", "", -1)
