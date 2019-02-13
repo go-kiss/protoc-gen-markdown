@@ -256,7 +256,7 @@ func (t *twirp) generateJsDocForMessage(m *message) string {
 
 func (t *twirp) generateDoc() {
 	options := jsbeautifier.DefaultOptions()
-	t.P("#", t.name)
+	t.P("# ", t.name)
 	t.P()
 	comments := strings.Split(t.comments.Leading, "\n")
 	for _, value := range comments {
