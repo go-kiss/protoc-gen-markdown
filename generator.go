@@ -27,6 +27,9 @@ type twirp struct {
 
 	// List of all service comments
 	comments *protokit.Comment
+
+	// Service name
+	name string
 }
 
 func newGenerator(params commandLineParams) *twirp {
@@ -71,7 +74,7 @@ func (t *twirp) GenerateMarkdown(req *plugin.CodeGeneratorRequest, resp *plugin.
 	for _, d := range descriptors {
 		for _, sd := range d.GetServices() {
 			t.scanService(sd)
-
+			t.name = *sd.Name
 			for _, api := range t.apis {
 				api.Input = t.generateJsDocForMessage(api.Request)
 				api.Output = t.generateJsDocForMessage(api.Reply)
@@ -253,10 +256,9 @@ func (t *twirp) generateJsDocForMessage(m *message) string {
 
 func (t *twirp) generateDoc() {
 	options := jsbeautifier.DefaultOptions()
-	comment := strings.Split(t.comments.Leading, "\n")
-	for _, value := range comment {
-		t.P("### ", value)
-	}
+	t.P("#", t.name)
+	t.P()
+	t.P(t.comments.Leading)
 	t.P()
 	for _, api := range t.apis {
 		anchor := strings.Replace(api.Path, "/", "", -1)
