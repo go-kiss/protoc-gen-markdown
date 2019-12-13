@@ -153,7 +153,9 @@ func (t *twirp) scanService(d *protokit.ServiceDescriptor) {
 
 		api.Method = "POST"
 		api.Path = t.params.pathPrefix + "/" + d.GetFullName() + "/" + md.GetName()
-		api.Doc = md.GetComments().GetLeading()
+		doc := md.GetComments().GetLeading()
+		// 支持文档换行
+		api.Doc = strings.Replace(doc, "\n", "\n\n", -1)
 
 		inputType := md.GetInputType()[1:] // trim leading dot
 		api.Request = t.messages[inputType]
