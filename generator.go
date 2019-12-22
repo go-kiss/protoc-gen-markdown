@@ -196,26 +196,31 @@ func (t *twirp) scanService(d *protokit.ServiceDescriptor) {
 }
 
 func getType(t string) string {
-	if strings.HasPrefix(t, ".") {
+	switch t {
+	case "TYPE_STRING":
+		return "string"
+	case "TYPE_DOUBLE", "TYPE_FLOAT":
+		return "float"
+	case "TYPE_BOOL":
+		return "bool"
+	case "TYPE_INT64", "TYPE_UINT64", "TYPE_INT32", "TYPE_UINT32":
+		return "int"
+	default:
 		return t
 	}
-
-	t = strings.Split(t, "_")[1]
-	return strings.ToLower(t)
 }
 
 func getTypeValue(t string) string {
-	if t == "TYPE_STRING" {
+	switch t {
+	case "TYPE_STRING":
 		return ""
-	} else if t == "TYPE_DOUBLE" || t == "TYPE_FLOAT" {
+	case "TYPE_DOUBLE", "TYPE_FLOAT":
 		return "0.0"
-	} else if t == "TYPE_BOOL" {
+	case "TYPE_BOOL":
 		return "false"
-	} else if t == "TYPE_INT64" || t == "TYPE_UINT64" {
-		return "string<int64>"
-	} else if t == "TYPE_INT32" || t == "TYPE_UINT32" {
+	case "TYPE_INT64", "TYPE_UINT64", "TYPE_INT32", "TYPE_UINT32":
 		return "0"
-	} else {
+	default:
 		return ""
 	}
 }
@@ -285,13 +290,13 @@ func (t *twirp) generateJsDocForField(field field) string {
 		m := t.messages[field.Type[1:]]
 		v = t.generateJsDocForMessage(m)
 		if field.isRepeated() {
-			doc := "// type:<list>"
+			doc := fmt.Sprintf("// type:<list<%s>>", m.Name)
 			if field.Note != "" {
 				doc = " " + field.Note
 			}
 			v = "[" + doc + "\n" + v + "]"
 		} else if field.KeyType != "" {
-			doc := fmt.Sprintf("// type:<map<%s,*>>", getType(field.KeyType))
+			doc := fmt.Sprintf("// type:<map<%s,%s>>", getType(field.KeyType), m.Name)
 			if field.Note != "" {
 				doc = " " + field.Note
 			}
