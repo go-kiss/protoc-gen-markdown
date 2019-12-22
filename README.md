@@ -13,3 +13,7 @@ protoc --markdown_out=. hello.proto
 # set path prefix to /api
 protoc --markdown_out=path_prefix=/api:. hello.proto
 ```
+
+## todo
+- [ ] support enum
+- [ ] support nested message
