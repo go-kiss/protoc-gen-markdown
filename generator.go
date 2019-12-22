@@ -94,19 +94,46 @@ func (t *twirp) GenerateMarkdown(req *plugin.CodeGeneratorRequest, resp *plugin.
 func (t *twirp) scanMessages(d *protokit.FileDescriptor) {
 	for _, md := range d.GetMessages() {
 		fields := make([]field, len(md.GetMessageFields()))
+
+		maps := make(map[string]*descriptor.DescriptorProto)
+		for _, t := range md.NestedType {
+			if t.Options.GetMapEntry() {
+				pkg := md.GetPackage()
+				name := fmt.Sprintf(".%s.%s.%s", pkg, md.GetName(), t.GetName())
+				maps[name] = t
+			}
+		}
+
 		for i, fd := range md.GetMessageFields() {
 			typeName := fd.GetTypeName()
 			if typeName == "" {
 				typeName = fd.GetType().String()
 			}
 
-			fields[i] = field{
+			f := field{
 				Name:  fd.GetName(),
 				Type:  typeName,
 				Doc:   fd.GetComments().GetLeading(),
 				Note:  fd.GetComments().GetTrailing(),
 				Label: fd.GetLabel(),
 			}
+
+			if m, ok := maps[f.Type]; ok {
+				for _, ff := range m.GetField() {
+					switch ff.GetName() {
+					case "key":
+						f.KeyType = ff.GetType().String()
+					case "value":
+						typeName := ff.GetTypeName()
+						if typeName == "" {
+							typeName = ff.GetType().String()
+						}
+						f.Type = typeName
+					}
+				}
+				f.Label = 0
+			}
+			fields[i] = f
 		}
 
 		t.messages[md.GetFullName()] = &message{
@@ -125,11 +152,12 @@ type message struct {
 }
 
 type field struct {
-	Name  string
-	Type  string
-	Note  string
-	Doc   string
-	Label descriptor.FieldDescriptorProto_Label
+	Name    string
+	Type    string
+	KeyType string
+	Note    string
+	Doc     string
+	Label   descriptor.FieldDescriptorProto_Label
 }
 
 func (f field) isRepeated() bool {
@@ -167,6 +195,31 @@ func (t *twirp) scanService(d *protokit.ServiceDescriptor) {
 	}
 }
 
+func getType(t string) string {
+	if strings.HasPrefix(t, ".") {
+		return t
+	}
+
+	t = strings.Split(t, "_")[1]
+	return strings.ToLower(t)
+}
+
+func getTypeValue(t string) string {
+	if t == "TYPE_STRING" {
+		return ""
+	} else if t == "TYPE_DOUBLE" || t == "TYPE_FLOAT" {
+		return "0.0"
+	} else if t == "TYPE_BOOL" {
+		return "false"
+	} else if t == "TYPE_INT64" || t == "TYPE_UINT64" {
+		return "string<int64>"
+	} else if t == "TYPE_INT32" || t == "TYPE_UINT32" {
+		return "0"
+	} else {
+		return ""
+	}
+}
+
 func (t *twirp) generateJsDocForField(field field) string {
 	var js string
 	var v, vt string
@@ -179,40 +232,55 @@ func (t *twirp) generateJsDocForField(field field) string {
 	}
 
 	if field.Type == "TYPE_STRING" {
-		if field.isRepeated() {
-			v = "[\"\",\"\"]"
-		} else {
-			v = "\"\""
-		}
 		vt = "string"
+		if field.isRepeated() {
+			v = `["",""]`
+		} else if field.KeyType != "" {
+			v = fmt.Sprintf(`{"%s":""}`, getTypeValue(field.KeyType))
+			vt = fmt.Sprintf("map<%s,string>", getType(field.KeyType))
+		} else {
+			v = `""`
+		}
 	} else if field.Type == "TYPE_DOUBLE" || field.Type == "TYPE_FLOAT" {
+		vt = "float"
 		if field.isRepeated() {
 			v = "[0.0, 0.0]"
+		} else if field.KeyType != "" {
+			v = fmt.Sprintf(`{"%s":0.0}`, getTypeValue(field.KeyType))
+			vt = fmt.Sprintf("map<%s,float>", getType(field.KeyType))
 		} else {
 			v = "0.0"
 		}
-		vt = "float"
 	} else if field.Type == "TYPE_BOOL" {
+		vt = "bool"
 		if field.isRepeated() {
 			v = "[false, false]"
+		} else if field.KeyType != "" {
+			v = fmt.Sprintf(`{"%s":false}`, getTypeValue(field.KeyType))
+			vt = fmt.Sprintf("map<%s,bool>", getType(field.KeyType))
 		} else {
 			v = "false"
 		}
-		vt = "bool"
 	} else if field.Type == "TYPE_INT64" || field.Type == "TYPE_UINT64" {
-		if field.isRepeated() {
-			v = "[\"0\", \"0\"]"
-		} else {
-			v = "\"0\""
-		}
 		vt = "string(int64)"
+		if field.isRepeated() {
+			v = `["0", "0"]`
+		} else if field.KeyType != "" {
+			v = fmt.Sprintf(`{"%s":"0"}`, getTypeValue(field.KeyType))
+			vt = fmt.Sprintf("map<%s,string<int64>>", getType(field.KeyType))
+		} else {
+			v = `"0"`
+		}
 	} else if field.Type == "TYPE_INT32" || field.Type == "TYPE_UINT32" {
+		vt = "int"
 		if field.isRepeated() {
 			v = "[0, 0]"
+		} else if field.KeyType != "" {
+			v = fmt.Sprintf(`{"%s":0}`, getTypeValue(field.KeyType))
+			vt = fmt.Sprintf("map<%s,int>", getType(field.KeyType))
 		} else {
 			v = "0"
 		}
-		vt = "int"
 	} else if field.Type[0] == '.' {
 		m := t.messages[field.Type[1:]]
 		v = t.generateJsDocForMessage(m)
@@ -222,6 +290,12 @@ func (t *twirp) generateJsDocForField(field field) string {
 				doc = " " + field.Note
 			}
 			v = "[" + doc + "\n" + v + "]"
+		} else if field.KeyType != "" {
+			doc := fmt.Sprintf("// type:<map<%s,*>>", getType(field.KeyType))
+			if field.Note != "" {
+				doc = " " + field.Note
+			}
+			v = fmt.Sprintf("{%s\n\"%s\":%s}", doc, getTypeValue(field.KeyType), v)
 		}
 		disableDoc = true
 	} else {
