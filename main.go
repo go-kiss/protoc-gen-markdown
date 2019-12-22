@@ -11,6 +11,10 @@ import (
 	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
 )
 
+func init() {
+	log.SetOutput(os.Stderr)
+}
+
 func main() {
 	req := readGenRequest(os.Stdin)
 
