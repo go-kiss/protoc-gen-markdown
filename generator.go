@@ -22,6 +22,8 @@ type twirp struct {
 	// Map of all proto messages
 	messages map[string]*message
 
+	enums map[string]*protokit.EnumDescriptor
+
 	// List of all APIs
 	apis []*api
 
@@ -36,6 +38,7 @@ func newGenerator(params commandLineParams) *twirp {
 	t := &twirp{
 		params:   params,
 		messages: map[string]*message{},
+		enums:    map[string]*protokit.EnumDescriptor{},
 		apis:     []*api{},
 		output:   bytes.NewBuffer(nil),
 	}
@@ -92,14 +95,26 @@ func (t *twirp) GenerateMarkdown(req *plugin.CodeGeneratorRequest, resp *plugin.
 }
 
 func (t *twirp) scanMessages(d *protokit.FileDescriptor) {
+	for _, ed := range d.GetEnums() {
+		t.scanEnum(ed)
+	}
+
 	for _, md := range d.GetMessages() {
 		t.scanMessage(md)
 	}
 }
 
+func (t *twirp) scanEnum(md *protokit.EnumDescriptor) {
+	t.enums["."+md.GetFullName()] = md
+}
+
 func (t *twirp) scanMessage(md *protokit.Descriptor) {
 	for _, smd := range md.GetMessages() {
 		t.scanMessage(smd)
+	}
+
+	for _, ed := range md.GetEnums() {
+		t.scanEnum(ed)
 	}
 
 	{
@@ -126,6 +141,18 @@ func (t *twirp) scanMessage(md *protokit.Descriptor) {
 				Doc:   fd.GetComments().GetLeading(),
 				Note:  fd.GetComments().GetTrailing(),
 				Label: fd.GetLabel(),
+			}
+
+			if e, ok := t.enums[fd.GetTypeName()]; ok {
+				f.Type = "TYPE_ENUM"
+				parts := []string{}
+
+				for _, v := range e.GetValues() {
+					line := fmt.Sprintf("%s(=%d) %s", v.GetName(), v.GetNumber(), v.GetComments().GetTrailing())
+					parts = append(parts, line)
+				}
+
+				f.Doc = strings.Join(parts, "\n")
 			}
 
 			if m, ok := maps[f.Type]; ok {
@@ -282,7 +309,7 @@ func (t *twirp) generateJsDocForField(field field) string {
 			v = `["0", "0"]`
 		} else if field.KeyType != "" {
 			v = fmt.Sprintf(`{"%s":"0"}`, getTypeValue(field.KeyType))
-			vt = fmt.Sprintf("map<%s,string<int64>>", getType(field.KeyType))
+			vt = fmt.Sprintf("map<%s,string(int64)>", getType(field.KeyType))
 		} else {
 			v = `"0"`
 		}
@@ -295,6 +322,13 @@ func (t *twirp) generateJsDocForField(field field) string {
 			vt = fmt.Sprintf("map<%s,int>", getType(field.KeyType))
 		} else {
 			v = "0"
+		}
+	} else if field.Type == "TYPE_ENUM" {
+		vt = "string(enum)"
+		if field.isRepeated() {
+			v = `["", ""]`
+		} else {
+			v = `""`
 		}
 	} else if field.Type[0] == '.' {
 		m := t.messages[field.Type[1:]]
