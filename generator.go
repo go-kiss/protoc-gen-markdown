@@ -93,6 +93,16 @@ func (t *twirp) GenerateMarkdown(req *plugin.CodeGeneratorRequest, resp *plugin.
 
 func (t *twirp) scanMessages(d *protokit.FileDescriptor) {
 	for _, md := range d.GetMessages() {
+		t.scanMessage(md)
+	}
+}
+
+func (t *twirp) scanMessage(md *protokit.Descriptor) {
+	for _, smd := range md.GetMessages() {
+		t.scanMessage(smd)
+	}
+
+	{
 		fields := make([]field, len(md.GetMessageFields()))
 
 		maps := make(map[string]*descriptor.DescriptorProto)
