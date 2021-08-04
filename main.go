@@ -7,16 +7,13 @@ import (
 )
 
 func main() {
-	g := twirp{}
+	g := markdown{}
 
 	var flags flag.FlagSet
 
-	// flags.StringVar(&g.OptionPrefix, "option_prefix", "sniper", "")
-	// flags.StringVar(&g.RootPackage, "root_package", "sniper", "")
-	// flags.BoolVar(&g.ValidateEnable, "validate_enable", false, "")
+	flags.StringVar(&g.Prefix, "prefix", "/", "API path prefix")
 
 	protogen.Options{
 		ParamFunc: flags.Set,
 	}.Run(g.Generate)
-
 }
