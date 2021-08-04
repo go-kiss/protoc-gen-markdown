@@ -171,7 +171,7 @@ func (md *markdown) jsDocForField(field *protogen.Field) string {
 	}
 
 	if field.Desc.IsList() {
-		js += "[\n" + vv + "]" + fmt.Sprintf(", // list<%s>", vt)
+		js += fmt.Sprintf("[%s], // list<%s>", vv, vt)
 	} else if field.Desc.IsMap() {
 		js += vv + fmt.Sprintf(", // map<%s>", vt)
 	} else if field.Enum != nil {

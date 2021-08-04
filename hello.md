@@ -32,9 +32,7 @@
     // message value demo
     g: {
         // string list value demo
-        a: [
-            ""
-        ], // list<string>
+        a: [""], // list<string>
         // map value demo
         b: {
             "0": ""
@@ -98,9 +96,7 @@
     // message value demo
     g: {
         // string list value demo
-        a: [
-            ""
-        ], // list<string>
+        a: [""], // list<string>
         // map value demo
         b: {
             "0": ""
