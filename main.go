@@ -112,7 +112,7 @@ func (md *markdown) scalarDefaultValue(field *protogen.Field) string {
 
 func (md *markdown) jsDocForField(field *protogen.Field) string {
 	js := field.Comments.Leading.String()
-	js += `"` + string(field.Desc.Name()) + `":`
+	js += string(field.Desc.Name()) + ":"
 
 	var vv string
 	var vt string
