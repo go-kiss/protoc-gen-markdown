@@ -132,7 +132,16 @@ func (md *markdown) jsDocForField(field *protogen.Field) string {
 		vv = md.jsDocForMessage(field.Message)
 		vt = string(field.Message.Desc.Name())
 	} else if field.Enum != nil {
-		vv = `"ENUM"`
+		vv = `"` + string(field.Enum.Values[0].Desc.Name()) + `"`
+		vt = ""
+		for i, v := range field.Enum.Values {
+			if i > 0 {
+				vt += ","
+			}
+			vt += string(v.Desc.Name())
+		}
+	} else if field.Oneof != nil {
+		vv = `"Does Not Support OneOf"`
 	} else {
 		vv = md.scalarDefaultValue(field)
 		vt = field.Desc.Kind().String()
@@ -142,6 +151,8 @@ func (md *markdown) jsDocForField(field *protogen.Field) string {
 		js += "[\n" + vv + "]" + fmt.Sprintf(", // list<%s>", vt)
 	} else if field.Desc.IsMap() {
 		js += vv + fmt.Sprintf(", // map<%s>", vt)
+	} else if field.Enum != nil {
+		js += vv + fmt.Sprintf(", // enum<%s>", vt)
 	} else {
 		js += vv + fmt.Sprintf(", // type<%s>", vt)
 	}
