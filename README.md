@@ -3,7 +3,7 @@
 ## install
 
 ```bash
-go get github.com/lvht/protoc-gen-markdown
+go install github.com/lvht/protoc-gen-markdown
 ```
 
 ## generate markdown
@@ -11,5 +11,5 @@ go get github.com/lvht/protoc-gen-markdown
 ```bash
 protoc --markdown_out=. hello.proto
 # set path prefix to /api
-protoc --markdown_out=path_prefix=/api:. hello.proto
+protoc --markdown_out=prefix=/api:. hello.proto
 ```
