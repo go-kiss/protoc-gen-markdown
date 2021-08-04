@@ -5,60 +5,58 @@ package demo;
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
-// 服务示例
+// Service demo.
 //
-// 服务级的注释都会同步到 markdown 文件
+// All leading comments will be copied to markdown.
 service Demo {
-    // 接口示例
+    // Rpc demo
     //
-    // 接口注释会同步到 markdown 文件的对应位置
+    // All leading comments will be copied to markdown.
     rpc Echo1(Foo) returns (google.protobuf.Empty) {}
-    // 接口示例二
+    // Another rpc demo
     rpc Echo2(google.protobuf.Empty) returns (Foo) {}
 }
 
-// 对象级的注释会忽略
+// Leading comments of message will be ignored.
 message Foo {
-    // 布尔值示例
+    // boolean value demo
     bool a = 1;
-    // 三十二位整数示例
+    // 32 bit int value demo
     int32 b = 2;
-    // 六十四位整数示例
-    int64 c = 3; // 使用 string 保存
-    // 浮点数示例
+    // 64 bit int value demo
+    int64 c = 3; // stored as string
+    // float value demo
     double d = 4;
-    // 字符示例
+    // string value demo
     string e = 5;
-    // 字节序列示例
-    bytes f = 6; // 使用 base64 string 保存
-    // 对象示例
+    // bytes value demo
+    bytes f = 6; // stored as base64 string
+    // message value demo
     Bar g = 7;
-    // 导入对象示例
+    // imported message value demo
     google.protobuf.Timestamp h = 8;
 }
 
-// 对象级的注释会忽略
 message Bar {
-    // 字符列表示例
+    // string list value demo
     repeated string a = 1;
-    // 字典示例
+    // map value demo
     map<int32,string> b = 2;
-    // 递归定义示例
+    // self reference value demo
     Baz c = 3;
     enum Sex {
         Unknown = 0;
         Male = 1;
         Female = 2;
     }
-    // 枚举示例
+    // enum value demo
     Sex d = 4;
-    // 对象列表示例
+    // message list value demo
     repeated Person e = 5;
 }
 
-// 对象级的注释会忽略
 message Baz {
-    Bar a = 1; // 被引用的对象不再展开
+    Bar a = 1; // self-referenced message will be displayed as {}
 }
 
 message Person {
