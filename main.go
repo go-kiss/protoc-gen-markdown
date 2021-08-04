@@ -2,18 +2,12 @@ package main
 
 import (
 	"flag"
-	"log"
-	"os"
 
 	"google.golang.org/protobuf/compiler/protogen"
 )
 
-func init() {
-	log.SetOutput(os.Stderr)
-}
-
 func main() {
-	g := newGenerator()
+	g := twirp{}
 
 	var flags flag.FlagSet
 
