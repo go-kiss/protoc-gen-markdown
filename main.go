@@ -54,14 +54,10 @@ func (md *markdown) Generate(plugin *protogen.Plugin) error {
 		fname := f.GeneratedFilenamePrefix + ".md"
 		t := plugin.NewGeneratedFile(fname, f.GoImportPath)
 
-		printDoc := func(c protogen.Comments) {
-			t.P(string(c))
-		}
-
 		for _, s := range f.Services {
 			t.P("# ", s.Desc.Name())
 			t.P()
-			printDoc(s.Comments.Leading)
+			t.P(string(s.Comments.Leading))
 
 			for _, m := range s.Methods {
 				name := string(m.Desc.FullName())
@@ -75,7 +71,7 @@ func (md *markdown) Generate(plugin *protogen.Plugin) error {
 				n := string(m.Desc.FullName())
 				t.P("## ", md.api(n))
 				t.P()
-				printDoc(m.Comments.Leading)
+				t.P(string(m.Comments.Leading))
 				t.P()
 				t.P("### Request")
 				t.P("```javascript")
