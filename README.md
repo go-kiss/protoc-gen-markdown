@@ -3,7 +3,7 @@
 ## install
 
 ```bash
-go install github.com/lvht/protoc-gen-markdown
+go install github.com/go-kiss/protoc-gen-markdown
 ```
 
 ## generate markdown
