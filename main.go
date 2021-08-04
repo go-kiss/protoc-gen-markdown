@@ -24,6 +24,25 @@ func main() {
 
 type markdown struct {
 	Prefix string
+
+	msgs []protoreflect.FullName
+}
+
+func (md *markdown) in(m *protogen.Message) {
+	md.msgs = append(md.msgs, m.Desc.FullName())
+
+}
+func (md *markdown) out() {
+	md.msgs = md.msgs[0 : len(md.msgs)-1]
+}
+
+func (md *markdown) recursive(m *protogen.Message) bool {
+	for _, n := range md.msgs {
+		if n == m.Desc.FullName() {
+			return true
+		}
+	}
+	return false
 }
 
 func (md *markdown) Generate(plugin *protogen.Plugin) error {
@@ -129,7 +148,11 @@ func (md *markdown) jsDocForField(field *protogen.Field) string {
 		vv = fmt.Sprintf("{\n\"%s\":%s}", kf.Default().String(), vv)
 		vt = fmt.Sprintf("%s,%s", kf.Kind().String(), vt)
 	} else if field.Message != nil {
-		vv = md.jsDocForMessage(field.Message)
+		if md.recursive(field.Message) {
+			vv = "{}"
+		} else {
+			vv = md.jsDocForMessage(field.Message)
+		}
 		vt = string(field.Message.Desc.Name())
 	} else if field.Enum != nil {
 		vv = `"` + string(field.Enum.Values[0].Desc.Name()) + `"`
@@ -167,6 +190,9 @@ func (md *markdown) jsDocForField(field *protogen.Field) string {
 }
 
 func (md *markdown) jsDocForMessage(m *protogen.Message) string {
+	md.in(m)
+	defer md.out()
+
 	js := "{\n"
 
 	for _, field := range m.Fields {
