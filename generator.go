@@ -2,19 +2,18 @@ package main
 
 import (
 	"fmt"
-	// "os"
-	// "strconv"
 	"strings"
 
 	"github.com/ditashi/jsbeautifier-go/jsbeautifier"
-	// "github.com/k0kubun/pp/v3"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type twirp struct{}
+type markdown struct {
+	Prefix string
+}
 
-func (g *twirp) Generate(plugin *protogen.Plugin) error {
+func (md *markdown) Generate(plugin *protogen.Plugin) error {
 	for _, f := range plugin.Files {
 		if len(f.Services) == 0 {
 			continue
@@ -27,16 +26,6 @@ func (g *twirp) Generate(plugin *protogen.Plugin) error {
 			t.P(string(c))
 		}
 
-		api := func(s string) string {
-			i := strings.LastIndex(s, ".")
-			return "/" + s[:i] + "/" + s[i+1:]
-		}
-
-		anchor := func(s string) string {
-			s = strings.ToLower(s)
-			return strings.ReplaceAll(s, ".", "")
-		}
-
 		for _, s := range f.Services {
 			t.P("# ", s.Desc.Name())
 			t.P()
@@ -44,25 +33,26 @@ func (g *twirp) Generate(plugin *protogen.Plugin) error {
 
 			for _, m := range s.Methods {
 				name := string(m.Desc.FullName())
-				api := api(name)
-				anchor := anchor(name)
+				api := md.api(name)
+				anchor := md.anchor(api)
 
 				t.P(fmt.Sprintf("- [%s](#%s)", api, anchor))
 			}
 			t.P()
 			for _, m := range s.Methods {
-				t.P("## ", api(string(m.Desc.FullName())))
+				n := string(m.Desc.FullName())
+				t.P("## ", md.api(n))
 				t.P()
 				printDoc(m.Comments.Leading)
 				t.P()
 				t.P("### Request")
 				t.P("```javascript")
-				t.P(g.jsDocForMessage(m.Input))
+				t.P(md.jsDocForMessage(m.Input))
 				t.P("```")
 				t.P()
 				t.P("### Reply")
 				t.P("```javascript")
-				t.P(g.jsDocForMessage(m.Output))
+				t.P(md.jsDocForMessage(m.Output))
 				t.P("```")
 			}
 		}
@@ -72,7 +62,25 @@ func (g *twirp) Generate(plugin *protogen.Plugin) error {
 	return nil
 }
 
-func (t *twirp) scalarDefaultValue(field *protogen.Field) string {
+func (md *markdown) api(s string) string {
+	i := strings.LastIndex(s, ".")
+
+	prefix := strings.Trim(md.Prefix, "/")
+	if prefix != "" {
+		prefix = "/" + prefix
+	}
+
+	return prefix + "/" + s[:i] + "/" + s[i+1:]
+}
+
+func (md *markdown) anchor(s string) string {
+	s = strings.ToLower(s)
+	s = strings.ReplaceAll(s, ".", "")
+	s = strings.ReplaceAll(s, "/", "")
+	return s
+}
+
+func (md *markdown) scalarDefaultValue(field *protogen.Field) string {
 	switch field.Desc.Kind() {
 	case protoreflect.StringKind, protoreflect.BytesKind:
 		return `""`
@@ -89,7 +97,7 @@ func (t *twirp) scalarDefaultValue(field *protogen.Field) string {
 	}
 }
 
-func (t *twirp) jsDocForField(field *protogen.Field) string {
+func (md *markdown) jsDocForField(field *protogen.Field) string {
 	js := field.Comments.Leading.String()
 	js += `"` + string(field.Desc.Name()) + `":`
 
@@ -98,22 +106,22 @@ func (t *twirp) jsDocForField(field *protogen.Field) string {
 	if field.Desc.IsMap() {
 		vf := field.Message.Fields[1]
 		if m := vf.Message; m != nil {
-			vv = t.jsDocForMessage(m)
+			vv = md.jsDocForMessage(m)
 			vt = string(vf.Message.Desc.FullName())
 		} else {
-			vv = t.scalarDefaultValue(vf)
+			vv = md.scalarDefaultValue(vf)
 			vt = vf.Desc.Kind().String()
 		}
 		kf := field.Desc.MapKey()
 		vv = fmt.Sprintf("{\n\"%s\":%s}", kf.Default().String(), vv)
 		vt = fmt.Sprintf("%s,%s", kf.Kind().String(), vt)
 	} else if field.Message != nil {
-		vv = t.jsDocForMessage(field.Message)
+		vv = md.jsDocForMessage(field.Message)
 		vt = string(field.Message.Desc.Name())
 	} else if field.Enum != nil {
 		vv = `"ENUM"`
 	} else {
-		vv = t.scalarDefaultValue(field)
+		vv = md.scalarDefaultValue(field)
 		vt = field.Desc.Kind().String()
 	}
 
@@ -134,11 +142,11 @@ func (t *twirp) jsDocForField(field *protogen.Field) string {
 	return js
 }
 
-func (t *twirp) jsDocForMessage(m *protogen.Message) string {
+func (md *markdown) jsDocForMessage(m *protogen.Message) string {
 	js := "{\n"
 
 	for _, field := range m.Fields {
-		js += t.jsDocForField(field)
+		js += md.jsDocForField(field)
 	}
 
 	js += "}"
