@@ -14,27 +14,60 @@ import (
 
 type twirp struct{}
 
-func newGenerator() *twirp {
-	t := &twirp{}
-
-	return t
-}
-
-func (t *twirp) Generate(plugin *protogen.Plugin) error {
+func (g *twirp) Generate(plugin *protogen.Plugin) error {
 	for _, f := range plugin.Files {
 		if len(f.Services) == 0 {
 			continue
 		}
 
 		fname := f.GeneratedFilenamePrefix + ".md"
-		gf := plugin.NewGeneratedFile(fname, f.GoImportPath)
+		t := plugin.NewGeneratedFile(fname, f.GoImportPath)
+
+		printDoc := func(c protogen.Comments) {
+			t.P(string(c))
+		}
+
+		api := func(s string) string {
+			i := strings.LastIndex(s, ".")
+			return "/" + s[:i] + "/" + s[i+1:]
+		}
+
+		anchor := func(s string) string {
+			s = strings.ToLower(s)
+			return strings.ReplaceAll(s, ".", "")
+		}
 
 		for _, s := range f.Services {
+			t.P("# ", s.Desc.Name())
+			t.P()
+			printDoc(s.Comments.Leading)
+
 			for _, m := range s.Methods {
-				gf.P(t.jsDocForMessage(m.Input))
-				// gf.P(t.generateJsDocForMessage(m.Output))
+				name := string(m.Desc.FullName())
+				api := api(name)
+				anchor := anchor(name)
+
+				t.P(fmt.Sprintf("- [%s](#%s)", api, anchor))
+			}
+			t.P()
+			for _, m := range s.Methods {
+				t.P("## ", api(string(m.Desc.FullName())))
+				t.P()
+				printDoc(m.Comments.Leading)
+				t.P()
+				t.P("### Request")
+				t.P("```javascript")
+				t.P(g.jsDocForMessage(m.Input))
+				t.P("```")
+				t.P()
+				t.P("### Reply")
+				t.P("```javascript")
+				t.P(g.jsDocForMessage(m.Output))
+				t.P("```")
 			}
 		}
+
+		t.P()
 	}
 	return nil
 }
@@ -114,45 +147,3 @@ func (t *twirp) jsDocForMessage(m *protogen.Message) string {
 
 	return js
 }
-
-// func (t *twirp) generateDoc() {
-// 	options := jsbeautifier.DefaultOptions()
-// 	t.P("# ", t.name)
-// 	t.P()
-// 	comments := strings.Split(t.comments.Leading, "\n")
-// 	for _, value := range comments {
-// 		t.P(value, "  ")
-// 	}
-// 	t.P()
-// 	for _, api := range t.apis {
-// 		anchor := strings.Replace(api.Path, "/", "", -1)
-// 		anchor = strings.Replace(anchor, ".", "", -1)
-// 		anchor = strings.ToLower(anchor)
-//
-// 		t.P(fmt.Sprintf("- [%s](#%s)", api.Path, anchor))
-// 	}
-//
-// 	t.P()
-//
-// 	for _, api := range t.apis {
-// 		t.P("## ", api.Path)
-// 		t.P()
-// 		t.P(api.Doc)
-// 		t.P()
-// 		t.P("### Method")
-// 		t.P()
-// 		t.P(api.Method)
-// 		t.P()
-// 		t.P("### Request")
-// 		t.P("```javascript")
-// 		code, _ := jsbeautifier.Beautify(&api.Input, options)
-// 		t.P(code)
-// 		t.P("```")
-// 		t.P()
-// 		t.P("### Reply")
-// 		t.P("```javascript")
-// 		code, _ = jsbeautifier.Beautify(&api.Output, options)
-// 		t.P(code)
-// 		t.P("```")
-// 	}
-// }
