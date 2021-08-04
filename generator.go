@@ -1,422 +1,158 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
+	// "os"
+	// "strconv"
 	"strings"
 
 	"github.com/ditashi/jsbeautifier-go/jsbeautifier"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/protoc-gen-go/descriptor"
-	plugin "github.com/golang/protobuf/protoc-gen-go/plugin"
-	"github.com/pseudomuto/protokit"
+	// "github.com/k0kubun/pp/v3"
+	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type twirp struct {
-	params commandLineParams
+type twirp struct{}
 
-	// Output buffer that holds the bytes we want to write out for a single file.
-	// Gets reset after working on a file.
-	output *bytes.Buffer
-
-	// Map of all proto messages
-	messages map[string]*message
-
-	enums map[string]*protokit.EnumDescriptor
-
-	// List of all APIs
-	apis []*api
-
-	// List of all service comments
-	comments *protokit.Comment
-
-	// Service name
-	name string
-}
-
-func newGenerator(params commandLineParams) *twirp {
-	t := &twirp{
-		params:   params,
-		messages: map[string]*message{},
-		enums:    map[string]*protokit.EnumDescriptor{},
-		apis:     []*api{},
-		output:   bytes.NewBuffer(nil),
-	}
+func newGenerator() *twirp {
+	t := &twirp{}
 
 	return t
 }
 
-func (t *twirp) Generate(in *plugin.CodeGeneratorRequest) *plugin.CodeGeneratorResponse {
-	resp := new(plugin.CodeGeneratorResponse)
-
-	t.scanAllMessages(in, resp)
-	t.GenerateMarkdown(in, resp)
-
-	return resp
-}
-
-// P forwards to g.gen.P, which prints output.
-func (t *twirp) P(args ...string) {
-	for _, v := range args {
-		t.output.WriteString(v)
-	}
-	t.output.WriteByte('\n')
-}
-
-func (t *twirp) scanAllMessages(req *plugin.CodeGeneratorRequest, resp *plugin.CodeGeneratorResponse) {
-	descriptors := protokit.ParseCodeGenRequest(req)
-
-	for _, d := range descriptors {
-		t.scanMessages(d)
-	}
-}
-
-func (t *twirp) GenerateMarkdown(req *plugin.CodeGeneratorRequest, resp *plugin.CodeGeneratorResponse) {
-	descriptors := protokit.ParseCodeGenRequest(req)
-
-	for _, d := range descriptors {
-		for _, sd := range d.GetServices() {
-			t.scanService(sd)
-			t.name = *sd.Name
-			for _, api := range t.apis {
-				api.Input = t.generateJsDocForMessage(api.Request)
-				api.Output = t.generateJsDocForMessage(api.Reply)
-			}
-
-			t.generateDoc()
-
-			name := strings.Replace(d.GetName(), ".proto", ".md", 1)
-			resp.File = append(resp.File, &plugin.CodeGeneratorResponse_File{
-				Name:    proto.String(name),
-				Content: proto.String(t.output.String()),
-			})
-		}
-	}
-}
-
-func (t *twirp) scanMessages(d *protokit.FileDescriptor) {
-	for _, ed := range d.GetEnums() {
-		t.scanEnum(ed)
-	}
-
-	for _, md := range d.GetMessages() {
-		t.scanMessage(md)
-	}
-}
-
-func (t *twirp) scanEnum(md *protokit.EnumDescriptor) {
-	t.enums["."+md.GetFullName()] = md
-}
-
-func (t *twirp) scanMessage(md *protokit.Descriptor) {
-	for _, smd := range md.GetMessages() {
-		t.scanMessage(smd)
-	}
-
-	for _, ed := range md.GetEnums() {
-		t.scanEnum(ed)
-	}
-
-	{
-		fields := make([]field, len(md.GetMessageFields()))
-
-		maps := make(map[string]*descriptor.DescriptorProto)
-		for _, t := range md.NestedType {
-			if t.Options.GetMapEntry() {
-				pkg := md.GetPackage()
-				name := fmt.Sprintf(".%s.%s.%s", pkg, md.GetName(), t.GetName())
-				maps[name] = t
-			}
+func (t *twirp) Generate(plugin *protogen.Plugin) error {
+	for _, f := range plugin.Files {
+		if len(f.Services) == 0 {
+			continue
 		}
 
-		for i, fd := range md.GetMessageFields() {
-			typeName := fd.GetTypeName()
-			if typeName == "" {
-				typeName = fd.GetType().String()
+		fname := f.GeneratedFilenamePrefix + ".md"
+		gf := plugin.NewGeneratedFile(fname, f.GoImportPath)
+
+		for _, s := range f.Services {
+			for _, m := range s.Methods {
+				gf.P(t.jsDocForMessage(m.Input))
+				// gf.P(t.generateJsDocForMessage(m.Output))
 			}
-
-			f := field{
-				Name:  fd.GetName(),
-				Type:  typeName,
-				Doc:   fd.GetComments().GetLeading(),
-				Note:  fd.GetComments().GetTrailing(),
-				Label: fd.GetLabel(),
-			}
-
-			if e, ok := t.enums[fd.GetTypeName()]; ok {
-				f.Type = "TYPE_ENUM"
-				parts := []string{}
-
-				for _, v := range e.GetValues() {
-					line := fmt.Sprintf("%s(=%d) %s", v.GetName(), v.GetNumber(), v.GetComments().GetTrailing())
-					parts = append(parts, line)
-				}
-
-				f.Doc = strings.Join(parts, "\n")
-			}
-
-			if m, ok := maps[f.Type]; ok {
-				for _, ff := range m.GetField() {
-					switch ff.GetName() {
-					case "key":
-						f.KeyType = ff.GetType().String()
-					case "value":
-						typeName := ff.GetTypeName()
-						if typeName == "" {
-							typeName = ff.GetType().String()
-						}
-						f.Type = typeName
-					}
-				}
-				f.Label = 0
-			}
-			fields[i] = f
-		}
-
-		t.messages[md.GetFullName()] = &message{
-			Name:   md.GetName(),
-			Doc:    md.GetComments().GetTrailing(),
-			Fields: fields,
 		}
 	}
+	return nil
 }
 
-type message struct {
-	Name   string
-	Fields []field
-	Label  descriptor.FieldDescriptorProto_Label
-	Doc    string
-}
-
-type field struct {
-	Name    string
-	Type    string
-	KeyType string
-	Note    string
-	Doc     string
-	Label   descriptor.FieldDescriptorProto_Label
-}
-
-func (f field) isRepeated() bool {
-	return f.Label == descriptor.FieldDescriptorProto_LABEL_REPEATED
-}
-
-type api struct {
-	Method  string
-	Path    string
-	Doc     string
-	Request *message
-	Reply   *message
-	Input   string
-	Output  string
-}
-
-func (t *twirp) scanService(d *protokit.ServiceDescriptor) {
-	t.comments = d.Comments
-	for _, md := range d.GetMethods() {
-		api := api{}
-
-		api.Method = "POST"
-		api.Path = t.params.pathPrefix + "/" + d.GetFullName() + "/" + md.GetName()
-		doc := md.GetComments().GetLeading()
-		// 支持文档换行
-		api.Doc = strings.Replace(doc, "\n", "\n\n", -1)
-
-		inputType := md.GetInputType()[1:] // trim leading dot
-		api.Request = t.messages[inputType]
-
-		outputType := md.GetOutputType()[1:] // trim leading dot
-		api.Reply = t.messages[outputType]
-
-		t.apis = append(t.apis, &api)
-	}
-}
-
-func getType(t string) string {
-	switch t {
-	case "TYPE_STRING":
-		return "string"
-	case "TYPE_DOUBLE", "TYPE_FLOAT":
-		return "float"
-	case "TYPE_BOOL":
-		return "bool"
-	case "TYPE_INT64", "TYPE_UINT64", "TYPE_INT32", "TYPE_UINT32":
-		return "int"
-	default:
-		return t
-	}
-}
-
-func getTypeValue(t string) string {
-	switch t {
-	case "TYPE_STRING":
-		return ""
-	case "TYPE_DOUBLE", "TYPE_FLOAT":
-		return "0.0"
-	case "TYPE_BOOL":
+func (t *twirp) scalarDefaultValue(field *protogen.Field) string {
+	switch field.Desc.Kind() {
+	case protoreflect.StringKind, protoreflect.BytesKind:
+		return `""`
+	case protoreflect.Fixed64Kind, protoreflect.Int64Kind,
+		protoreflect.Sfixed64Kind, protoreflect.Sint64Kind,
+		protoreflect.Uint64Kind:
+		return `"0"`
+	case protoreflect.DoubleKind, protoreflect.FloatKind:
+		return `0.0`
+	case protoreflect.BoolKind:
 		return "false"
-	case "TYPE_INT64", "TYPE_UINT64", "TYPE_INT32", "TYPE_UINT32":
-		return "0"
 	default:
-		return ""
+		return "0"
 	}
 }
 
-func (t *twirp) generateJsDocForField(field field) string {
-	var js string
-	var v, vt string
-	disableDoc := false
+func (t *twirp) jsDocForField(field *protogen.Field) string {
+	js := field.Comments.Leading.String()
+	js += `"` + string(field.Desc.Name()) + `":`
 
-	if field.Doc != "" {
-		for _, line := range strings.Split(field.Doc, "\n") {
-			js += "// " + line + "\n"
-		}
-	}
-
-	if field.Type == "TYPE_STRING" {
-		vt = "string"
-		if field.isRepeated() {
-			v = `["",""]`
-		} else if field.KeyType != "" {
-			v = fmt.Sprintf(`{"%s":""}`, getTypeValue(field.KeyType))
-			vt = fmt.Sprintf("map<%s,string>", getType(field.KeyType))
+	var vv string
+	var vt string
+	if field.Desc.IsMap() {
+		vf := field.Message.Fields[1]
+		if m := vf.Message; m != nil {
+			vv = t.jsDocForMessage(m)
+			vt = string(vf.Message.Desc.FullName())
 		} else {
-			v = `""`
+			vv = t.scalarDefaultValue(vf)
+			vt = vf.Desc.Kind().String()
 		}
-	} else if field.Type == "TYPE_DOUBLE" || field.Type == "TYPE_FLOAT" {
-		vt = "float"
-		if field.isRepeated() {
-			v = "[0.0, 0.0]"
-		} else if field.KeyType != "" {
-			v = fmt.Sprintf(`{"%s":0.0}`, getTypeValue(field.KeyType))
-			vt = fmt.Sprintf("map<%s,float>", getType(field.KeyType))
-		} else {
-			v = "0.0"
-		}
-	} else if field.Type == "TYPE_BOOL" {
-		vt = "bool"
-		if field.isRepeated() {
-			v = "[false, false]"
-		} else if field.KeyType != "" {
-			v = fmt.Sprintf(`{"%s":false}`, getTypeValue(field.KeyType))
-			vt = fmt.Sprintf("map<%s,bool>", getType(field.KeyType))
-		} else {
-			v = "false"
-		}
-	} else if field.Type == "TYPE_INT64" || field.Type == "TYPE_UINT64" {
-		vt = "string(int64)"
-		if field.isRepeated() {
-			v = `["0", "0"]`
-		} else if field.KeyType != "" {
-			v = fmt.Sprintf(`{"%s":"0"}`, getTypeValue(field.KeyType))
-			vt = fmt.Sprintf("map<%s,string(int64)>", getType(field.KeyType))
-		} else {
-			v = `"0"`
-		}
-	} else if field.Type == "TYPE_INT32" || field.Type == "TYPE_UINT32" {
-		vt = "int"
-		if field.isRepeated() {
-			v = "[0, 0]"
-		} else if field.KeyType != "" {
-			v = fmt.Sprintf(`{"%s":0}`, getTypeValue(field.KeyType))
-			vt = fmt.Sprintf("map<%s,int>", getType(field.KeyType))
-		} else {
-			v = "0"
-		}
-	} else if field.Type == "TYPE_ENUM" {
-		vt = "string(enum)"
-		if field.isRepeated() {
-			v = `["", ""]`
-		} else {
-			v = `""`
-		}
-	} else if field.Type[0] == '.' {
-		m := t.messages[field.Type[1:]]
-		v = t.generateJsDocForMessage(m)
-		if field.isRepeated() {
-			doc := fmt.Sprintf("// type:<list<%s>>", m.Name)
-			if field.Note != "" {
-				doc = " " + field.Note
-			}
-			v = "[" + doc + "\n" + v + "]"
-		} else if field.KeyType != "" {
-			doc := fmt.Sprintf("// type:<map<%s,%s>>", getType(field.KeyType), m.Name)
-			if field.Note != "" {
-				doc = " " + field.Note
-			}
-			v = fmt.Sprintf("{%s\n\"%s\":%s}", doc, getTypeValue(field.KeyType), v)
-		}
-		disableDoc = true
+		kf := field.Desc.MapKey()
+		vv = fmt.Sprintf("{\n\"%s\":%s}", kf.Default().String(), vv)
+		vt = fmt.Sprintf("%s,%s", kf.Kind().String(), vt)
+	} else if field.Message != nil {
+		vv = t.jsDocForMessage(field.Message)
+		vt = string(field.Message.Desc.Name())
+	} else if field.Enum != nil {
+		vv = `"ENUM"`
 	} else {
-		v = "UNKNOWN"
+		vv = t.scalarDefaultValue(field)
+		vt = field.Desc.Kind().String()
 	}
 
-	if disableDoc {
-		js += fmt.Sprintf("%s: %s,", field.Name, v)
+	if field.Desc.IsList() {
+		js += "[\n" + vv + "]" + fmt.Sprintf(", // list<%s>", vt)
+	} else if field.Desc.IsMap() {
+		js += vv + fmt.Sprintf(", // map<%s>", vt)
 	} else {
-		js += fmt.Sprintf("%s: %s, // type:<%s>", field.Name, v, vt)
-		if field.Note != "" {
-			js = js + ", " + field.Note
-		}
+		js += vv + fmt.Sprintf(", // type<%s>", vt)
 	}
-	js = strings.Trim(js, " ")
 
-	js += "\n"
+	if t := string(field.Comments.Trailing); len(t) > 0 {
+		js += ", " + strings.TrimLeft(t, " ")
+	} else {
+		js += "\n"
+	}
 
 	return js
 }
 
-func (t *twirp) generateJsDocForMessage(m *message) string {
-	var js string
-	js += "{\n"
+func (t *twirp) jsDocForMessage(m *protogen.Message) string {
+	js := "{\n"
 
 	for _, field := range m.Fields {
-		js += t.generateJsDocForField(field)
+		js += t.jsDocForField(field)
 	}
 
 	js += "}"
+	options := jsbeautifier.DefaultOptions()
+	js, _ = jsbeautifier.Beautify(&js, options)
 
 	return js
 }
 
-func (t *twirp) generateDoc() {
-	options := jsbeautifier.DefaultOptions()
-	t.P("# ", t.name)
-	t.P()
-	comments := strings.Split(t.comments.Leading, "\n")
-	for _, value := range comments {
-		t.P(value, "  ")
-	}
-	t.P()
-	for _, api := range t.apis {
-		anchor := strings.Replace(api.Path, "/", "", -1)
-		anchor = strings.Replace(anchor, ".", "", -1)
-		anchor = strings.ToLower(anchor)
-
-		t.P(fmt.Sprintf("- [%s](#%s)", api.Path, anchor))
-	}
-
-	t.P()
-
-	for _, api := range t.apis {
-		t.P("## ", api.Path)
-		t.P()
-		t.P(api.Doc)
-		t.P()
-		t.P("### Method")
-		t.P()
-		t.P(api.Method)
-		t.P()
-		t.P("### Request")
-		t.P("```javascript")
-		code, _ := jsbeautifier.Beautify(&api.Input, options)
-		t.P(code)
-		t.P("```")
-		t.P()
-		t.P("### Reply")
-		t.P("```javascript")
-		code, _ = jsbeautifier.Beautify(&api.Output, options)
-		t.P(code)
-		t.P("```")
-	}
-}
+// func (t *twirp) generateDoc() {
+// 	options := jsbeautifier.DefaultOptions()
+// 	t.P("# ", t.name)
+// 	t.P()
+// 	comments := strings.Split(t.comments.Leading, "\n")
+// 	for _, value := range comments {
+// 		t.P(value, "  ")
+// 	}
+// 	t.P()
+// 	for _, api := range t.apis {
+// 		anchor := strings.Replace(api.Path, "/", "", -1)
+// 		anchor = strings.Replace(anchor, ".", "", -1)
+// 		anchor = strings.ToLower(anchor)
+//
+// 		t.P(fmt.Sprintf("- [%s](#%s)", api.Path, anchor))
+// 	}
+//
+// 	t.P()
+//
+// 	for _, api := range t.apis {
+// 		t.P("## ", api.Path)
+// 		t.P()
+// 		t.P(api.Doc)
+// 		t.P()
+// 		t.P("### Method")
+// 		t.P()
+// 		t.P(api.Method)
+// 		t.P()
+// 		t.P("### Request")
+// 		t.P("```javascript")
+// 		code, _ := jsbeautifier.Beautify(&api.Input, options)
+// 		t.P(code)
+// 		t.P("```")
+// 		t.P()
+// 		t.P("### Reply")
+// 		t.P("```javascript")
+// 		code, _ = jsbeautifier.Beautify(&api.Output, options)
+// 		t.P(code)
+// 		t.P("```")
+// 	}
+// }
