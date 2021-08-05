@@ -32,6 +32,7 @@ func (md *markdown) in(m *protogen.Message) {
 	md.msgs = append(md.msgs, m.Desc.FullName())
 
 }
+
 func (md *markdown) out() {
 	md.msgs = md.msgs[0 : len(md.msgs)-1]
 }
