@@ -47,47 +47,48 @@ func (md *markdown) recursive(m *protogen.Message) bool {
 }
 
 func (md *markdown) Generate(plugin *protogen.Plugin) error {
-	for _, f := range plugin.Files {
-		if len(f.Services) == 0 {
-			continue
-		}
-
-		fname := f.GeneratedFilenamePrefix + ".md"
-		t := plugin.NewGeneratedFile(fname, f.GoImportPath)
-
-		for _, s := range f.Services {
-			t.P("# ", s.Desc.Name())
-			t.P()
-			t.P(string(s.Comments.Leading))
-
-			for _, m := range s.Methods {
-				name := string(m.Desc.FullName())
-				api := md.api(name)
-				anchor := md.anchor(api)
-
-				t.P(fmt.Sprintf("- [%s](#%s)", api, anchor))
-			}
-			t.P()
-			for _, m := range s.Methods {
-				n := string(m.Desc.FullName())
-				t.P("## ", md.api(n))
-				t.P()
-				t.P(string(m.Comments.Leading))
-				t.P()
-				t.P("### Request")
-				t.P("```javascript")
-				t.P(md.jsDocForMessage(m.Input))
-				t.P("```")
-				t.P()
-				t.P("### Reply")
-				t.P("```javascript")
-				t.P(md.jsDocForMessage(m.Output))
-				t.P("```")
-			}
-		}
-
-		t.P()
+	// The service should be defined in the last file.
+	// All other files are imported by the service proto.
+	f := plugin.Files[len(plugin.Files)-1]
+	if len(f.Services) == 0 {
+		return nil
 	}
+
+	fname := f.GeneratedFilenamePrefix + ".md"
+	t := plugin.NewGeneratedFile(fname, f.GoImportPath)
+
+	for _, s := range f.Services {
+		t.P("# ", s.Desc.Name())
+		t.P()
+		t.P(string(s.Comments.Leading))
+
+		for _, m := range s.Methods {
+			name := string(m.Desc.FullName())
+			api := md.api(name)
+			anchor := md.anchor(api)
+
+			t.P(fmt.Sprintf("- [%s](#%s)", api, anchor))
+		}
+		t.P()
+		for _, m := range s.Methods {
+			n := string(m.Desc.FullName())
+			t.P("## ", md.api(n))
+			t.P()
+			t.P(string(m.Comments.Leading))
+			t.P()
+			t.P("### Request")
+			t.P("```javascript")
+			t.P(md.jsDocForMessage(m.Input))
+			t.P("```")
+			t.P()
+			t.P("### Reply")
+			t.P("```javascript")
+			t.P(md.jsDocForMessage(m.Output))
+			t.P("```")
+		}
+	}
+
+	t.P()
 	return nil
 }
 
