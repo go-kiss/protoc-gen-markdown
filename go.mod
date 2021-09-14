@@ -1,4 +1,4 @@
-module github.com/lvht/protoc-gen-markdown
+module github.com/go-kiss/protoc-gen-markdown
 
 go 1.13
 
